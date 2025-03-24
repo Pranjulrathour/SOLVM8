@@ -1,0 +1,127 @@
+# SOLVEM8 – Enhancement Prompt for AI Tool Refinement
+
+## Objective
+Enhance the current SOLVEM8 AI-powered Assignment Solver by addressing specific functionality issues and improving the overall user experience. The focus is on fixing critical problems and implementing the following key features:
+
+1. **UI/UX Enhancements**
+2. **Button Functionality Fixes**
+3. **Robust File Upload Processing**
+4. **AI-Based Solution Generation using Gemini API**
+5. **Reliable PDF Export Functionality**
+6. **Pricing Integration via Razorpay**
+7. **Database, Authentication, and File Management via Supabase**
+
+---
+
+## Detailed Requirements
+
+### 1. UI/UX Enhancements
+- **Modern & Minimalist Design:**  
+  - Redesign the current UI using a minimalist approach.
+  - Use consistent branding with colors: Primary Green (`#238F51`), Accent Blue/Purple (`#5B4DF0`), and Error Red (`#EA0909`).
+  - Improve layout spacing, typography, and visual hierarchy for clarity.
+- **Animations & Transitions:**  
+  - Integrate smooth transitions for button hover, loading states, and modal popups (consider using Tailwind CSS transitions or Framer Motion).
+- **Responsiveness:**  
+  - Ensure the UI adapts flawlessly to mobile, tablet, and desktop resolutions.
+- **User Feedback:**  
+  - Provide clear visual feedback on actions (e.g., success messages in Green, errors in Red).
+
+### 2. Button Functionality Fixes
+- **"Solve Document" Button:**  
+  - Ensure the button activates only when a valid file is successfully uploaded.
+  - On click, it should trigger the complete backend processing workflow.
+  - Implement visual indicators (e.g., loading spinner, button disable state) to reflect processing status.
+- **"Download PDF" Button:**  
+  - Validate that the generated PDF can be properly downloaded and opened.
+  - Provide a fallback error message if the PDF generation fails.
+
+### 3. Robust File Upload Processing
+- **File Validation:**  
+  - Accept only supported file types (PDF, DOCX, Excel, Images).
+  - Implement client-side and server-side validations.
+- **Processing Workflow:**  
+  - Once a file is uploaded, ensure it is not only stored but also passed to the processing pipeline.
+  - Display real-time upload progress using a progress bar styled in Primary Green.
+- **Error Handling:**  
+  - Clearly notify the user of any upload errors with detailed error messages.
+
+### 4. AI-Based Solution Generation using Gemini API
+- **Integration of Gemini API:**
+  - Use the provided Gemini API key (securely stored in environment variables) to process the extracted text.
+  - Implement an asynchronous function, for example:
+    ```typescript
+    async function processAssignment(text: string): Promise<string> {
+      const response = await fetch('https://api.gemini.example.com/v1/solve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.GEMINI_API_KEY}`,
+        },
+        body: JSON.stringify({ prompt: text }),
+      });
+      if (!response.ok) {
+        throw new Error('Gemini API call failed');
+      }
+      const data = await response.json();
+      return data.solution; // Adjust according to actual response structure
+    }
+    ```
+- **Text Extraction:**
+  - For each file type:
+    - **PDFs:** Use a Node.js library (e.g., pdf-parse) or a microservice to extract text.
+    - **DOCX/Excel:** Use appropriate parsing libraries.
+    - **Images:** Integrate Tesseract OCR (Node wrapper) to extract text.
+- **Solution Curation:**
+  - Ensure the solution output is aligned, formatted, and presented clearly.
+  - Store the final solution in a structured format for PDF generation.
+
+### 5. Reliable PDF Export Functionality
+- **PDF Generation Workflow:**
+  - Once the AI-generated solution is ready, trigger the PDF generation endpoint.
+  - Use a library like `pdfkit` (Node.js) to format the solution into a presentable PDF.
+  - Ensure that the PDF is saved in Supabase Storage and provide a secure download URL.
+- **Error Handling:**
+  - Validate that the PDF opens correctly.
+  - Display error messages if the export fails.
+
+### 6. Pricing Integration via Razorpay
+- **Free Usage Limit:**
+  - Display a clear indicator on the dashboard: “3 solutions left.”
+  - Deduct one free solution each time a document is processed.
+- **Payment Flow:**
+  - Once free attempts are exhausted, prompt the user to purchase additional solution credits.
+  - Integrate Razorpay to:
+    - Create an order using the Razorpay API.
+    - Process payments securely.
+    - Update user records (e.g., increase solution credits or update subscription status) on successful transactions.
+- **UI Feedback:**
+  - Show confirmation messages upon successful payment.
+  - Ensure errors in payment processing are handled gracefully.
+
+### 7. Database, Authentication, and File Management via Supabase
+- **Authentication:**
+  - Implement user sign-up and login using Supabase Auth.
+  - Securely store user sessions (JWT tokens) and persist session data.
+- **Database Schema:**
+  - **Users Table:** Fields include `id`, `email`, `freeAttempts` (default 3), `subscriptionStatus`, etc.
+  - **AssignmentHistory Table:** Fields include `id`, `userId`, `fileURL`, `processedOutputURL`, `timestamp`, `attemptCount`.
+- **File Storage:**
+  - Configure Supabase Storage for:
+    - Uploaded assignment files.
+    - Generated PDFs.
+  - Enforce access control with Row-Level Security (RLS).
+
+---
+
+## Summary
+This detailed prompt focuses solely on the functionality enhancements needed for SOLVEM8:
+- **UI/UX:** Modern, minimalist design with smooth animations and clear visual feedback.
+- **Button Fixes:** Robust handling for "Solve Document" and "Download PDF" actions.
+- **File Upload Processing:** Comprehensive validation and real-time feedback.
+- **AI Integration:** Use Gemini API (API key provided) for solution generation and text extraction workflows.
+- **PDF Export:** Reliable PDF generation with proper error handling.
+- **Pricing & Payment:** Implement free usage (3 solutions left) and integrate Razorpay for additional credits.
+- **Backend Infrastructure:** Use Supabase for authentication, database, and file management.
+
+This prompt is designed to guide an AI-driven development tool to refine the current SOLVEM8 application, addressing the issues you’ve identified and implementing the necessary enhancements in a professional and structured manner.

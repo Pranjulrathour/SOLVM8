@@ -24,6 +24,8 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          // Custom brand colors
+          green: "#238F51",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -36,10 +38,14 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
+          // Custom brand colors
+          purple: "#5B4DF0",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          // Custom brand colors
+          red: "#EA0909",
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
