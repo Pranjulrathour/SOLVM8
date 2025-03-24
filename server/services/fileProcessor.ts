@@ -3,43 +3,44 @@ import { v4 as uuidv4 } from 'uuid';
 import { fileTypeFromBuffer } from 'file-type';
 import { createWorker } from 'tesseract.js';
 import type { Multer } from 'multer';
-// Use dynamic imports for ES modules
+// Import docx-parser - don't import pdf-parse globally to avoid initialization issues
+import * as docxParser from 'docx-parser';
+
+// PDF parser function - lazy load pdf-parse to avoid initialization issues
 const pdfParse = async (buffer: Buffer) => {
   try {
-    // For PDF parsing, we'll use a simplified approach in development
-    console.log('PDF parsing would happen here in production');
-    return { text: "This is simulated PDF text content for development." };
+    // Import pdf-parse only when needed
+    const pdfParseLib = await import('pdf-parse');
+    // Use the pdf-parse library to extract text
+    const data = await pdfParseLib.default(buffer);
+    return { text: data.text || "" };
   } catch (err) {
     console.error('PDF parse error:', err);
     throw new Error('Failed to parse PDF');
   }
 };
 
-// Simplified docx parser for development
+// DOCX parser using actual docx-parser library
 const docx = { 
   parseDocx: (buffer: Buffer, callback: (err: Error | null, data: string) => void) => {
     try {
-      // Simulate docx parsing
-      console.log('DOCX parsing would happen here in production');
-      callback(null, "This is simulated DOCX text content for development.");
+      docxParser.parseDocx(buffer, (err: Error | null, output: string) => {
+        if (err) {
+          console.error('DOCX parsing error:', err);
+          callback(new Error('Failed to parse DOCX file'), '');
+        } else {
+          callback(null, output);
+        }
+      });
     } catch (err) {
+      console.error('DOCX parsing unexpected error:', err);
       callback(err instanceof Error ? err : new Error('Docx parsing error'), '');
     }
   }
 };
 
-// Simplified xlsx handling for development
-const xlsxUtils = {
-  read: () => ({ 
-    SheetNames: ['Sheet1'],
-    Sheets: { 
-      Sheet1: {} 
-    }
-  }),
-  utils: {
-    sheet_to_json: () => [['Cell A1', 'Cell B1'], ['Cell A2', 'Cell B2']]
-  }
-};
+// Import xlsx library
+import * as XLSX from 'xlsx';
 
 interface ProcessedFile {
   fileUrl: string;
@@ -150,20 +151,29 @@ class FileProcessor {
    */
   private async extractFromExcel(buffer: Buffer): Promise<string> {
     try {
-      // Using our simplified xlsxUtils for development
-      const workbook = xlsxUtils.read();
+      // Use the actual XLSX library to read the Excel file
+      const workbook = XLSX.read(buffer);
       
       let result = '';
       
-      workbook.SheetNames.forEach((sheetName: string) => {
+      // Process each sheet in the workbook
+      workbook.SheetNames.forEach((sheetName) => {
         const sheet = workbook.Sheets[sheetName];
-        const sheetData = xlsxUtils.utils.sheet_to_json();
+        // Convert sheet to JSON data
+        const sheetData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
         
-        result += `Sheet: ${sheetName}\n`;
-        sheetData.forEach((row: any) => {
-          result += row.join('\t') + '\n';
-        });
-        result += '\n';
+        if (sheetData.length > 0) {
+          result += `Sheet: ${sheetName}\n`;
+          
+          // Convert each row to a tab-separated string
+          sheetData.forEach((row: any) => {
+            if (Array.isArray(row) && row.length > 0) {
+              result += row.join('\t') + '\n';
+            }
+          });
+          
+          result += '\n';
+        }
       });
       
       return result.trim();
@@ -180,10 +190,22 @@ class FileProcessor {
    */
   private async extractFromImage(buffer: Buffer): Promise<string> {
     try {
-      // Simplified OCR implementation to avoid tesseract.js issues
-      console.log('OCR would process the image here in production');
-      // Return a placeholder for development
-      return "Extracted text from image would appear here. This is a placeholder since OCR is disabled in development.";
+      // In production, we would integrate with Tesseract.js
+      // For now, create a safe implementation that won't cause errors
+      
+      // Log the image processing attempt
+      console.log('Image processing initiated, buffer size:', buffer.length);
+      
+      // In the future, we would use tesseract.js like:
+      // const worker = await createWorker();
+      // await worker.loadLanguage('eng');
+      // await worker.initialize('eng');
+      // const { data: { text } } = await worker.recognize(buffer);
+      // await worker.terminate();
+      // return text;
+      
+      // For now, return a message indicating OCR would be used
+      return "Image uploaded successfully. OCR text extraction will be available in production.";
     } catch (error) {
       console.error('Image OCR error:', error);
       throw new Error('Failed to extract text from image');
