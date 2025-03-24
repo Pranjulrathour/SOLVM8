@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import Navbar from "@/components/Navbar";
 import FileUpload from "@/components/FileUpload";
 import SolutionDisplay from "@/components/SolutionDisplay";
-import AssignmentHistory from "@/components/AssignmentHistory";
+import AssignmentHistory, { Assignment } from "@/components/AssignmentHistory";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
@@ -11,16 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { User, BarChart3, Clock, ScrollText } from "lucide-react";
-
-interface Assignment {
-  id: string;
-  fileName: string;
-  processedDate: string;
-  fileUrl: string;
-  processedOutputUrl: string;
-  question: string;
-  solution: string;
-}
 
 const Dashboard: React.FC = () => {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -106,8 +96,8 @@ const Dashboard: React.FC = () => {
 
   const handleViewAssignment = (assignment: Assignment) => {
     setCurrentFileUrl(assignment.fileUrl);
-    setExtractedText(assignment.question);
-    setSolution(assignment.solution);
+    setExtractedText(assignment.question || '');
+    setSolution(assignment.solution || null);
     setAttemptCount(3); // Set to max to disable refine button for history items
   };
 
