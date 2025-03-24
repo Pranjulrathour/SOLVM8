@@ -96,7 +96,8 @@ const Dashboard: React.FC = () => {
 
   const handleViewAssignment = (assignment: Assignment) => {
     setCurrentFileUrl(assignment.fileUrl);
-    setExtractedText(assignment.question || '');
+    // If extractedText is available in the assignment, use it; otherwise fall back to question
+    setExtractedText(assignment.extractedText || assignment.question || '');
     setSolution(assignment.solution || null);
     setAttemptCount(3); // Set to max to disable refine button for history items
   };
@@ -224,6 +225,7 @@ const Dashboard: React.FC = () => {
                   attemptCount={attemptCount}
                   maxAttempts={3}
                   onRefine={handleRefineSolution}
+                  extractedText={extractedText}
                 />
               </div>
             </div>

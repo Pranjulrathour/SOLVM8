@@ -12,6 +12,7 @@ export interface Assignment {
   processedOutputUrl: string;
   question?: string;
   solution?: string;
+  extractedText?: string;
 }
 
 interface AssignmentHistoryProps {
