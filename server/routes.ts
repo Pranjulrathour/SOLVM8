@@ -190,6 +190,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'No text provided for processing' });
       }
       
+      // Log the extracted text for debugging
+      console.log('EXTRACTED TEXT FROM DOCUMENT:');
+      console.log('==============================');
+      console.log(text);
+      console.log('==============================');
+      
       // Get user and check remaining attempts
       const user = await storage.getUser(userId);
       if (!user) {
@@ -225,7 +231,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({
         message: 'Assignment processed successfully',
         solution,
-        assignmentId: assignment.id
+        assignmentId: assignment.id,
+        extractedText: text // Return the extracted text to the client
       });
     } catch (error) {
       console.error('Assignment processing error:', error);

@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Download, RefreshCw, FileText, Share, Copy, Check } from 'lucide-react';
+import { Download, RefreshCw, FileText, Share, Copy, Check, FileDown, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface SolutionDisplayProps {
   solution: string | null;
@@ -12,6 +13,7 @@ interface SolutionDisplayProps {
   attemptCount: number;
   maxAttempts: number;
   onRefine: () => void;
+  extractedText?: string; // Add extracted text
 }
 
 const SolutionDisplay: React.FC<SolutionDisplayProps> = ({
@@ -20,7 +22,8 @@ const SolutionDisplay: React.FC<SolutionDisplayProps> = ({
   fileUrl,
   attemptCount,
   maxAttempts,
-  onRefine
+  onRefine,
+  extractedText
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPdfLoading, setIsPdfLoading] = useState(false);
@@ -156,6 +159,25 @@ const SolutionDisplay: React.FC<SolutionDisplayProps> = ({
         </div>
       </div>
       
+      {/* Extracted Text Display */}
+      {extractedText && (
+        <Accordion type="single" collapsible className="mb-4">
+          <AccordionItem value="extracted-text" className="border border-gray-200 rounded-lg overflow-hidden">
+            <AccordionTrigger className="py-3 px-4 bg-gray-50 hover:bg-gray-100">
+              <div className="flex items-center">
+                <FileDown className="mr-2 h-4 w-4 text-gray-500" />
+                <span className="text-sm font-medium">View Extracted Text</span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 py-3 bg-white border-t border-gray-200">
+              <div className="max-h-60 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap">
+                {extractedText}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      )}
+
       <Separator className="my-4" />
       
       <div className="flex flex-wrap gap-3">
