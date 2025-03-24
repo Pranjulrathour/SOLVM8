@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Download, RefreshCw, FileText, Share, Copy, Check, FileDown, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import ReactMarkdown from 'react-markdown';
 
 interface SolutionDisplayProps {
   solution: string | null;
@@ -170,8 +171,18 @@ const SolutionDisplay: React.FC<SolutionDisplayProps> = ({
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 py-3 bg-white border-t border-gray-200">
-              <div className="max-h-60 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap">
-                {extractedText}
+              <div className="max-h-[400px] overflow-y-auto text-sm text-gray-700">
+                {extractedText.includes('###') || extractedText.includes('##') ? (
+                  <div className="prose prose-sm max-w-none">
+                    <ReactMarkdown>
+                      {extractedText}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="whitespace-pre-wrap">
+                    {extractedText}
+                  </div>
+                )}
               </div>
             </AccordionContent>
           </AccordionItem>

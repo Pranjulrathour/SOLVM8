@@ -3,6 +3,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { fileTypeFromBuffer } from 'file-type';
 import { createWorker } from 'tesseract.js';
 import type { Multer } from 'multer';
+// Import pdf.js-extract for PDF extraction
+import { PDFExtract } from 'pdf.js-extract';
+import { promisify } from 'util';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 // Import docx-parser
 import * as docxParser from 'docx-parser';
 
@@ -28,6 +34,13 @@ const docx = {
 // Import xlsx library
 import * as XLSX from 'xlsx';
 
+// Promised versions of fs functions
+const writeFileAsync = promisify(fs.writeFile);
+const unlinkAsync = promisify(fs.unlink);
+
+// Create an instance of PDF extractor
+const pdfExtract = new PDFExtract();
+
 interface ProcessedFile {
   fileUrl: string;
   extractedText: string;
@@ -50,7 +63,10 @@ class FileProcessor {
       const fileUrl = await supabaseService.uploadFile(file.buffer, 'assignments', filePath);
       
       // Extract text from file based on its type
-      const extractedText = await this.extractText(file.buffer, file.mimetype);
+      let extractedText = await this.extractText(file.buffer, file.mimetype);
+      
+      // Format the extracted text for better readability
+      extractedText = this.formatExtractedText(extractedText);
       
       return {
         fileUrl,
@@ -99,90 +115,79 @@ class FileProcessor {
    * @returns Extracted text
    */
   private async extractFromPdf(buffer: Buffer): Promise<string> {
+    let tempFilePath = '';
+    
     try {
-      // Basic PDF signature check (simple validation)
-      const pdfSignature = buffer.toString('ascii', 0, 5);
-      if (pdfSignature !== '%PDF-') {
-        throw new Error('Invalid PDF format');
-      }
-      
       // Log successful PDF detection
       console.log('PDF detected, processing file...');
       
-      // Convert PDF buffer to string for text extraction
-      // We limit to first 200KB for performance
-      const pdfText = buffer.toString('utf8', 0, Math.min(buffer.length, 200000));
+      // Create a temporary file to save the PDF
+      const tempDir = os.tmpdir();
+      tempFilePath = path.join(tempDir, `${uuidv4()}.pdf`);
       
-      // Simple but effective text extraction approach for PDFs
-      const extractedTexts: string[] = [];
+      // Write buffer to temporary file
+      await writeFileAsync(tempFilePath, buffer);
       
-      // Find all text between parentheses, which is how most text is stored in PDFs
-      const textRegex = /\(([^\)]{2,})\)/g;
-      let match;
+      // Use pdf.js-extract to extract text
+      const data = await pdfExtract.extract(tempFilePath, {});
       
-      while ((match = textRegex.exec(pdfText)) !== null) {
-        if (match[1] && match[1].length > 2) {
-          // Clean up common PDF text encodings
-          let text = match[1]
-            .replace(/\\n/g, ' ')
-            .replace(/\\r/g, ' ')
-            .replace(/\\\(/g, '(')
-            .replace(/\\\)/g, ')')
-            .replace(/\\\\/g, '\\');
-          
-          // If text is printable and not just numbers or symbols
-          if (/[a-zA-Z]{2,}/.test(text)) {
-            extractedTexts.push(text);
+      // Process extracted data
+      let extractedText = '';
+      if (data && data.pages) {
+        // Combine text from all pages
+        for (const page of data.pages) {
+          const pageContent = page.content || [];
+          // Extract text from each content item
+          for (const item of pageContent) {
+            if (item.str) {
+              extractedText += item.str + ' ';
+            }
           }
+          extractedText += '\n';
         }
       }
       
-      // Find hex-encoded text (another common PDF text format)
-      const hexTextRegex = /<([0-9A-Fa-f]{6,})>/g;
-      while ((match = hexTextRegex.exec(pdfText)) !== null) {
-        if (match[1]) {
-          try {
-            let text = '';
-            const hex = match[1];
-            
-            // Convert hex to ASCII
-            for (let i = 0; i < hex.length; i += 2) {
-              if (i + 1 < hex.length) {
-                const charCode = parseInt(hex.substr(i, 2), 16);
-                // Only include printable ASCII
-                if (charCode >= 32 && charCode <= 126) {
-                  text += String.fromCharCode(charCode);
-                }
-              }
-            }
-            
-            // Only add meaningful text segments
-            if (text.length > 3 && /[a-zA-Z]{2,}/.test(text)) {
-              extractedTexts.push(text);
-            }
-          } catch (e) {
-            // Skip invalid hex
-          }
-        }
-      }
-      
-      // If no text was found, provide a helpful message
-      if (extractedTexts.length === 0) {
-        console.log("No text extracted from PDF, likely image-based or encrypted");
-        return "The PDF appears to be image-based, encrypted, or uses custom encoding. Please provide a text summary of your assignment question.";
-      }
-      
-      // Join all extracted text fragments
-      const result = extractedTexts
-        .join(' ')
+      // Clean up the extracted text
+      extractedText = extractedText
         .replace(/\s+/g, ' ') // Normalize whitespace
         .trim();
       
-      console.log(`Successfully extracted ${result.length} characters from PDF`);
-      return result;
+      // If no meaningful text was extracted
+      if (!extractedText || extractedText.trim().length < 10) {
+        console.log("Minimal text extracted from PDF, likely image-based");
+        
+        // Try OCR as fallback for image-based PDFs
+        try {
+          console.log('Attempting OCR for image-based PDF...');
+          return await this.extractFromImage(buffer);
+        } catch (ocrError) {
+          console.error('OCR fallback failed:', ocrError);
+          return "The PDF appears to be image-based. Please provide a text version or summary of your assignment question.";
+        }
+      }
+      
+      console.log(`Successfully extracted ${extractedText.length} characters from PDF`);
+      return extractedText;
     } catch (error) {
       console.error('PDF extraction error:', error);
-      throw new Error('Failed to extract text from PDF');
+      
+      // Fallback to OCR if pdf-extract fails
+      try {
+        console.log('Attempting OCR fallback for PDF...');
+        return await this.extractFromImage(buffer);
+      } catch (fallbackError) {
+        console.error('All PDF extraction methods failed:', fallbackError);
+        throw new Error('Failed to extract text from PDF');
+      }
+    } finally {
+      // Clean up temporary file
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        try {
+          await unlinkAsync(tempFilePath);
+        } catch (cleanupError) {
+          console.error('Error cleaning up temporary PDF file:', cleanupError);
+        }
+      }
     }
   }
   
@@ -254,26 +259,317 @@ class FileProcessor {
    */
   private async extractFromImage(buffer: Buffer): Promise<string> {
     try {
-      // In production, we would integrate with Tesseract.js
-      // For now, create a safe implementation that won't cause errors
+      console.log('Starting OCR text extraction...');
       
-      // Log the image processing attempt
-      console.log('Image processing initiated, buffer size:', buffer.length);
+      // Create a temporary file for the image (Tesseract works better with files)
+      const tempDir = os.tmpdir();
+      const tempFilePath = path.join(tempDir, `${uuidv4()}.png`);
       
-      // In the future, we would use tesseract.js like:
-      // const worker = await createWorker();
-      // await worker.loadLanguage('eng');
-      // await worker.initialize('eng');
-      // const { data: { text } } = await worker.recognize(buffer);
-      // await worker.terminate();
-      // return text;
+      // Write buffer to temporary file
+      await writeFileAsync(tempFilePath, buffer);
       
-      // For now, return a message indicating OCR would be used
-      return "Image uploaded successfully. OCR text extraction will be available in production.";
+      // Create a worker with English language
+      const worker = await createWorker();
+      await worker.loadLanguage('eng');
+      await worker.initialize('eng');
+      
+      // Log progress
+      worker.setLogger(m => {
+        if (m.status === 'recognizing text') {
+          console.log(`OCR progress: ${Math.floor(m.progress * 100)}%`);
+        }
+      });
+      
+      // Extract text from image
+      const { data } = await worker.recognize(tempFilePath);
+      
+      // Cleanup
+      await worker.terminate();
+      if (fs.existsSync(tempFilePath)) {
+        await unlinkAsync(tempFilePath);
+      }
+      
+      // Check if text was successfully extracted
+      if (!data.text || data.text.trim().length === 0) {
+        console.log('OCR completed but no text was extracted');
+        return "No text could be extracted from the image. Please provide a clearer image or manually enter the text.";
+      }
+      
+      console.log(`OCR completed successfully. Extracted ${data.text.length} characters.`);
+      return data.text;
     } catch (error) {
       console.error('Image OCR error:', error);
       throw new Error('Failed to extract text from image');
     }
+  }
+
+  /**
+   * Format extracted text to improve readability and organize content
+   * @param text Raw extracted text
+   * @returns Formatted text
+   */
+  private formatExtractedText(text: string): string {
+    if (!text || text.trim().length === 0) {
+      return text;
+    }
+    
+    try {
+      console.log('Formatting extracted text...');
+      
+      // Replace multiple spaces with single space
+      let formatted = text.replace(/\s+/g, ' ').trim();
+      
+      // Split text into lines and paragraphs
+      formatted = this.detectAndFormatParagraphs(formatted);
+      
+      // Detect and format questions
+      formatted = this.detectAndFormatQuestions(formatted);
+      
+      // Format mathematical content
+      formatted = this.formatMathematicalContent(formatted);
+      
+      // Format tabular data
+      formatted = this.formatTabularData(formatted);
+      
+      // Group related questions
+      formatted = this.groupRelatedQuestions(formatted);
+      
+      // Add a header
+      formatted = "### Extracted Assignment Content:\n\n" + formatted;
+      
+      // Add a footer note
+      formatted += "\n\n---\n*Please review the extracted content and make any necessary corrections.*";
+      
+      console.log('Text formatting completed');
+      return formatted;
+    } catch (error) {
+      console.error('Error formatting text:', error);
+      // Return original text if formatting fails
+      return text;
+    }
+  }
+  
+  /**
+   * Detect and format paragraphs in text
+   * @param text Raw text
+   * @returns Text with properly formatted paragraphs
+   */
+  private detectAndFormatParagraphs(text: string): string {
+    // Split on common sentence endings followed by capital letters (likely paragraph breaks)
+    const sentenceEndingPattern = /([.!?])\s+([A-Z])/g;
+    let formatted = text.replace(sentenceEndingPattern, '$1\n\n$2');
+    
+    // Ensure consistent newlines
+    formatted = formatted.replace(/\r\n/g, '\n');
+    
+    // Replace triple or more newlines with double newlines
+    formatted = formatted.replace(/\n{3,}/g, '\n\n');
+    
+    return formatted;
+  }
+  
+  /**
+   * Detect and format questions in text
+   * @param text Raw text
+   * @returns Text with properly formatted questions
+   */
+  private detectAndFormatQuestions(text: string): string {
+    // Common question starters and patterns
+    const questionPatterns = [
+      // Question numbers with different formats (1., 1), Q1., Question 1, etc.)
+      /(\n|^)([0-9]+[\.\)]\s*)/g,
+      /(\n|^)(Q[0-9]+[\.\)]\s*)/g,
+      /(\n|^)(Question\s+[0-9]+[\.\):\s]*)/gi,
+      
+      // Multiple choice options
+      /(\n|^)([A-D][\.\)]\s*)/g,
+      /(\n|^)(\([A-D]\)\s*)/g,
+      
+      // Questions with question marks
+      /([^.!?]\s*)(\?)\s+([A-Z])/g
+    ];
+    
+    let formatted = text;
+    
+    // Apply formatting for each pattern
+    questionPatterns.forEach(pattern => {
+      if (pattern.toString().includes('?')) {
+        // Special handling for question marks to add paragraph breaks
+        formatted = formatted.replace(pattern, '$1$2\n\n$3');
+      } else {
+        // For numbered questions and options, add newlines before them
+        formatted = formatted.replace(pattern, '\n\n$1$2');
+      }
+    });
+    
+    // Format true/false and yes/no options
+    const optionPatterns = [
+      /(\b)(True|False)(\b)/gi,
+      /(\b)(Yes|No)(\b)/gi
+    ];
+    
+    optionPatterns.forEach(pattern => {
+      formatted = formatted.replace(pattern, '\n• $2');
+    });
+    
+    // Clean up extra whitespace
+    formatted = formatted.replace(/\n{3,}/g, '\n\n');
+    
+    return formatted;
+  }
+  
+  /**
+   * Format mathematical content in the text
+   * @param text Extracted text
+   * @returns Text with formatted math expressions
+   */
+  private formatMathematicalContent(text: string): string {
+    // Mathematical operators and symbols to format
+    const mathPatterns = [
+      // Equations with equals sign
+      /(\w+\s*=\s*[\w\d\+\-\*\/\^\(\)]+)/g,
+      
+      // Fractions
+      /(\d+\/\d+)/g,
+      
+      // Exponents
+      /(\w+\^[\d\w]+)/g,
+      
+      // Math formulas
+      /([\w\d]+\s*[\+\-\*\/]\s*[\w\d\+\-\*\/\^\(\)]+)/g
+    ];
+    
+    let formatted = text;
+    
+    // Wrap math expressions in code blocks
+    mathPatterns.forEach(pattern => {
+      formatted = formatted.replace(pattern, (match) => {
+        // Don't format if already inside code blocks
+        if (match.includes('`')) return match;
+        return '`' + match + '`';
+      });
+    });
+    
+    return formatted;
+  }
+  
+  /**
+   * Format tabular data in the text
+   * @param text Extracted text
+   * @returns Text with formatted tables
+   */
+  private formatTabularData(text: string): string {
+    // Look for potential tabular data (lines with multiple spaces or tabs)
+    const lines = text.split('\n');
+    let formatted = '';
+    let inTable = false;
+    let tableLines: string[] = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Detect potential table rows (lines with multiple tab-like separations)
+      const isTableRow = (line.includes('\t') || (line.match(/\s{2,}/g)?.length || 0) > 2) && line.trim().length > 0;
+      
+      if (isTableRow) {
+        if (!inTable) {
+          inTable = true;
+          tableLines = [];
+        }
+        tableLines.push(line);
+      } else {
+        if (inTable && tableLines.length > 0) {
+          // Process and format table
+          formatted += this.formatTableLines(tableLines) + '\n\n';
+          inTable = false;
+          tableLines = [];
+        }
+        formatted += line + '\n';
+      }
+    }
+    
+    // Handle any remaining table at the end of text
+    if (inTable && tableLines.length > 0) {
+      formatted += this.formatTableLines(tableLines) + '\n\n';
+    }
+    
+    return formatted;
+  }
+  
+  /**
+   * Format a group of lines as a table
+   * @param lines Lines that appear to be a table
+   * @returns Markdown formatted table
+   */
+  private formatTableLines(lines: string[]): string {
+    // Simple formatting to preserve tabular data
+    let result = '```\n';
+    lines.forEach(line => {
+      // Replace multiple spaces with evenly spaced columns
+      const cleanLine = line.replace(/\s{2,}/g, '  ');
+      result += cleanLine + '\n';
+    });
+    result += '```';
+    return result;
+  }
+  
+  /**
+   * Group related questions together
+   * @param text Formatted text
+   * @returns Text with grouped questions
+   */
+  private groupRelatedQuestions(text: string): string {
+    const lines = text.split('\n');
+    let formatted = '';
+    let currentGroup = '';
+    
+    // Common question section headers
+    const sectionHeaderPatterns = [
+      /^Section\s+\d+/i,
+      /^Part\s+[A-Z\d]+/i,
+      /^Exercise\s+\d+/i,
+      /^Problem\s+\d+/i
+    ];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Check if this line is a section header
+      const isSectionHeader = sectionHeaderPatterns.some(pattern => pattern.test(line));
+      
+      if (isSectionHeader) {
+        // End previous group if exists
+        if (currentGroup) {
+          formatted += currentGroup + '\n\n';
+          currentGroup = '';
+        }
+        
+        // Start new group with header
+        currentGroup = '## ' + line + '\n';
+      } else if (line.match(/^\d+[\.\)]/)) {
+        // This is a numbered question
+        if (currentGroup && !currentGroup.includes('## ')) {
+          // If we have content but no section header, add one
+          formatted += '## Questions\n' + currentGroup + '\n\n';
+          currentGroup = '';
+        }
+        
+        // Add question with proper formatting
+        currentGroup += '\n### ' + line + '\n';
+      } else if (line) {
+        // Regular content line
+        currentGroup += line + '\n';
+      } else if (line === '') {
+        // Empty line - keep one
+        currentGroup += '\n';
+      }
+    }
+    
+    // Add any remaining group
+    if (currentGroup) {
+      formatted += currentGroup;
+    }
+    
+    return formatted;
   }
 }
 

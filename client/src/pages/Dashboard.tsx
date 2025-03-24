@@ -185,12 +185,55 @@ const Dashboard: React.FC = () => {
                   </div>
                   
                   <div className="space-y-4">
-                    <textarea 
-                      value={extractedText} 
-                      onChange={e => setExtractedText(e.target.value)}
-                      placeholder="Type or paste your question here..."
-                      className="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition-all-smooth"
-                    />
+                    <div className="relative border border-gray-300 rounded-lg overflow-hidden">
+                      <textarea 
+                        value={extractedText} 
+                        onChange={e => setExtractedText(e.target.value)}
+                        placeholder="Type or paste your question here..."
+                        className="w-full min-h-[250px] p-4 font-mono text-sm focus:ring-primary-green focus:border-primary-green transition-all-smooth"
+                        style={{ 
+                          resize: 'vertical',
+                          lineHeight: '1.5',
+                          overflowY: 'auto'
+                        }}
+                      />
+                      
+                      <div className="absolute bottom-2 right-2 flex gap-2">
+                        <button
+                          onClick={() => {
+                            const textarea = document.querySelector('textarea');
+                            if (textarea) {
+                              textarea.style.height = `${Math.max(250, textarea.scrollHeight + 20)}px`;
+                            }
+                          }}
+                          className="p-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all-smooth"
+                          title="Expand editor"
+                        >
+                          <span className="sr-only">Expand</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/>
+                            <path d="M3 16.2V21m0 0h4.8M3 21l6-6"/>
+                            <path d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/>
+                            <path d="M3 7.8V3m0 0h4.8M3 3l6 6"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-gray-500">
+                        {extractedText.length > 0 ? `${extractedText.length} characters` : ''}
+                      </div>
+                      
+                      <button 
+                        onClick={() => setExtractedText('')}
+                        className={`text-xs text-red-500 hover:text-red-700 transition-all-smooth ${
+                          !extractedText ? 'opacity-0 pointer-events-none' : ''
+                        }`}
+                      >
+                        Clear
+                      </button>
+                    </div>
                     
                     <button 
                       onClick={() => processAssignment(extractedText)}
