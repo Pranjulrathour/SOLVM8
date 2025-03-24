@@ -5,8 +5,6 @@ import { createWorker } from 'tesseract.js';
 import type { Multer } from 'multer';
 // Import docx-parser
 import * as docxParser from 'docx-parser';
-// Import PDF.js
-import * as pdfjsLib from 'pdfjs-dist';
 
 // DOCX parser using actual docx-parser library
 const docx = { 
@@ -102,9 +100,6 @@ class FileProcessor {
    */
   private async extractFromPdf(buffer: Buffer): Promise<string> {
     try {
-      // For development, we'll implement a safer approach
-      // that doesn't require worker configuration
-      
       // Basic PDF signature check (simple validation)
       const pdfSignature = buffer.toString('ascii', 0, 5);
       if (pdfSignature !== '%PDF-') {
@@ -114,27 +109,77 @@ class FileProcessor {
       // Log successful PDF detection
       console.log('PDF detected, processing file...');
       
-      // Simple PDF content preview - extract ASCII text that might be present
-      // This is a simplified fallback approach
-      const text = buffer.toString('ascii');
+      // Convert PDF buffer to string for text extraction
+      // We limit to first 200KB for performance
+      const pdfText = buffer.toString('utf8', 0, Math.min(buffer.length, 200000));
       
-      // Extract visible text using basic regex
-      // This won't extract all text but provides basic functionality
-      const textLines = [];
-      const regex = /\(([^\)]+)\)/g;
+      // Simple but effective text extraction approach for PDFs
+      const extractedTexts: string[] = [];
+      
+      // Find all text between parentheses, which is how most text is stored in PDFs
+      const textRegex = /\(([^\)]{2,})\)/g;
       let match;
       
-      while ((match = regex.exec(text)) !== null) {
-        if (match[1].length > 2) { // Filter out very short matches
-          textLines.push(match[1]);
+      while ((match = textRegex.exec(pdfText)) !== null) {
+        if (match[1] && match[1].length > 2) {
+          // Clean up common PDF text encodings
+          let text = match[1]
+            .replace(/\\n/g, ' ')
+            .replace(/\\r/g, ' ')
+            .replace(/\\\(/g, '(')
+            .replace(/\\\)/g, ')')
+            .replace(/\\\\/g, '\\');
+          
+          // If text is printable and not just numbers or symbols
+          if (/[a-zA-Z]{2,}/.test(text)) {
+            extractedTexts.push(text);
+          }
         }
       }
       
-      if (textLines.length === 0) {
-        return "PDF file processed successfully. Content appears to be image-based or encrypted.";
+      // Find hex-encoded text (another common PDF text format)
+      const hexTextRegex = /<([0-9A-Fa-f]{6,})>/g;
+      while ((match = hexTextRegex.exec(pdfText)) !== null) {
+        if (match[1]) {
+          try {
+            let text = '';
+            const hex = match[1];
+            
+            // Convert hex to ASCII
+            for (let i = 0; i < hex.length; i += 2) {
+              if (i + 1 < hex.length) {
+                const charCode = parseInt(hex.substr(i, 2), 16);
+                // Only include printable ASCII
+                if (charCode >= 32 && charCode <= 126) {
+                  text += String.fromCharCode(charCode);
+                }
+              }
+            }
+            
+            // Only add meaningful text segments
+            if (text.length > 3 && /[a-zA-Z]{2,}/.test(text)) {
+              extractedTexts.push(text);
+            }
+          } catch (e) {
+            // Skip invalid hex
+          }
+        }
       }
       
-      return textLines.join(' ').trim();
+      // If no text was found, provide a helpful message
+      if (extractedTexts.length === 0) {
+        console.log("No text extracted from PDF, likely image-based or encrypted");
+        return "The PDF appears to be image-based, encrypted, or uses custom encoding. Please provide a text summary of your assignment question.";
+      }
+      
+      // Join all extracted text fragments
+      const result = extractedTexts
+        .join(' ')
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+      
+      console.log(`Successfully extracted ${result.length} characters from PDF`);
+      return result;
     } catch (error) {
       console.error('PDF extraction error:', error);
       throw new Error('Failed to extract text from PDF');
