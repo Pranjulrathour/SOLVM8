@@ -9,6 +9,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { User, BarChart3, Clock, ScrollText } from "lucide-react";
 
 interface Assignment {
   id: string;
@@ -30,6 +32,7 @@ const Dashboard: React.FC = () => {
   const [solution, setSolution] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [attemptCount, setAttemptCount] = useState(0);
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
   // Redirect if not authenticated
@@ -53,7 +56,7 @@ const Dashboard: React.FC = () => {
   };
 
   const processAssignment = async (text: string) => {
-    if (!user || user.freeAttempts <= 0 && attemptCount === 0) {
+    if (!user || (user.freeAttempts <= 0 && attemptCount === 0)) {
       setShowSubscriptionModal(true);
       return;
     }
@@ -109,68 +112,190 @@ const Dashboard: React.FC = () => {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-green mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!user) return null;
 
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <div className="bg-gray-50 min-h-screen">
       <Navbar />
       
-      <div className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-8" aria-label="Tabs">
-            <button className="py-4 px-1 text-primaryGreen border-b-2 border-primaryGreen font-medium text-sm" aria-current="page">
-              Dashboard
-            </button>
-            <button className="py-4 px-1 text-gray-500 border-b-2 border-transparent font-medium text-sm hover:text-gray-700 hover:border-gray-300">
-              Assignment History
-            </button>
-            <button className="py-4 px-1 text-gray-500 border-b-2 border-transparent font-medium text-sm hover:text-gray-700 hover:border-gray-300">
-              Account
-            </button>
-          </nav>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* User Info Card */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">{user.username}</h2>
+              <p className="text-gray-500">{user.email}</p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="bg-primary-green/10 rounded-full px-4 py-2 flex items-center">
+                <span className="text-primary-green font-medium">{user.freeAttempts}</span>
+                <span className="text-primary-green ml-1">free attempts left</span>
+              </div>
+              
+              <button 
+                onClick={() => setShowSubscriptionModal(true)}
+                className="bg-accent-purple text-white px-4 py-2 rounded-md text-sm font-medium transition-all-smooth hover:bg-accent-purple/90 active:scale-95"
+              >
+                Upgrade
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-      
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row md:space-x-6">
-          <div className="md:w-2/3">
-            {/* User Info Card */}
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">{user.username}</h2>
-                  <p className="text-gray-500">{user.email}</p>
+        
+        <Tabs defaultValue="dashboard" className="mb-6 animate-fade-in">
+          <TabsList className="bg-white border border-gray-200 shadow-sm">
+            <TabsTrigger 
+              value="dashboard" 
+              onClick={() => setActiveTab("dashboard")}
+              className="data-[state=active]:bg-primary-green/10 data-[state=active]:text-primary-green"
+            >
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger 
+              value="history" 
+              onClick={() => setActiveTab("history")}
+              className="data-[state=active]:bg-primary-green/10 data-[state=active]:text-primary-green"
+            >
+              <Clock className="h-4 w-4 mr-2" />
+              Assignment History
+            </TabsTrigger>
+            <TabsTrigger 
+              value="account" 
+              onClick={() => setActiveTab("account")}
+              className="data-[state=active]:bg-primary-green/10 data-[state=active]:text-primary-green"
+            >
+              <User className="h-4 w-4 mr-2" />
+              Account
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="dashboard" className="mt-6">
+            <div className="flex flex-col lg:flex-row lg:space-x-6">
+              <div className="lg:w-2/3 space-y-6">
+                {/* File Upload Component */}
+                <FileUpload onFileUploaded={handleFileUploaded} />
+                
+                {/* Text Input Section */}
+                <div className="bg-white rounded-xl shadow-md p-6 animate-fade-in">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Enter Assignment Question</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <textarea 
+                      value={extractedText} 
+                      onChange={e => setExtractedText(e.target.value)}
+                      placeholder="Type or paste your question here..."
+                      className="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg focus:ring-primary-green focus:border-primary-green transition-all-smooth"
+                    />
+                    
+                    <button 
+                      onClick={() => processAssignment(extractedText)}
+                      disabled={!extractedText || isProcessing}
+                      className="w-full py-2.5 bg-primary-green text-white rounded-md font-medium transition-all-smooth hover:bg-primary-green/90 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    >
+                      {isProcessing ? (
+                        <span className="flex items-center justify-center">
+                          <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                          Processing...
+                        </span>
+                      ) : (
+                        <span className="flex items-center justify-center">
+                          <ScrollText className="h-5 w-5 mr-2" />
+                          Generate Solution
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <div className="bg-primaryGreen bg-opacity-10 rounded-full px-4 py-2">
-                  <span className="text-primaryGreen font-medium">{user.freeAttempts}</span>
-                  <span className="text-primaryGreen"> free attempts left</span>
+                
+                {/* Recent Assignments */}
+                <AssignmentHistory onViewAssignment={handleViewAssignment} />
+              </div>
+              
+              {/* Solution Display */}
+              <div className="lg:w-1/3 mt-6 lg:mt-0">
+                <SolutionDisplay 
+                  solution={solution}
+                  question={extractedText}
+                  fileUrl={currentFileUrl}
+                  attemptCount={attemptCount}
+                  maxAttempts={3}
+                  onRefine={handleRefineSolution}
+                />
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="history" className="mt-6">
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Assignment History</h2>
+              <AssignmentHistory onViewAssignment={handleViewAssignment} fullHistory={true} />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="account" className="mt-6">
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Account Settings</h2>
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-md font-medium text-gray-700 mb-2">Profile Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                      <input 
+                        type="text" 
+                        value={user.username} 
+                        disabled
+                        className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <input 
+                        type="email" 
+                        value={user.email} 
+                        disabled
+                        className="w-full p-2 bg-gray-100 border border-gray-300 rounded-md"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-md font-medium text-gray-700 mb-2">Subscription</h3>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-medium text-gray-900">Free Plan</p>
+                        <p className="text-sm text-gray-500">3 free attempts per month</p>
+                      </div>
+                      <button 
+                        onClick={() => setShowSubscriptionModal(true)}
+                        className="bg-accent-purple text-white px-3 py-1.5 rounded-md text-sm font-medium"
+                      >
+                        Upgrade
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            
-            {/* File Upload Component */}
-            <FileUpload onFileUploaded={handleFileUploaded} />
-            
-            {/* Recent Assignments */}
-            <AssignmentHistory onViewAssignment={handleViewAssignment} />
-          </div>
-          
-          {/* Solution Display */}
-          <div className="md:w-1/3 mt-6 md:mt-0">
-            <SolutionDisplay 
-              solution={solution}
-              question={extractedText}
-              fileUrl={currentFileUrl}
-              attemptCount={attemptCount}
-              maxAttempts={3}
-              onRefine={handleRefineSolution}
-            />
-          </div>
-        </div>
-      </main>
+          </TabsContent>
+        </Tabs>
+      </div>
       
       {/* Subscription Modal */}
       <SubscriptionModal 
